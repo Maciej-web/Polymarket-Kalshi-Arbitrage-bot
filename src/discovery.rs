@@ -95,7 +95,7 @@ impl DiscoveryClient {
         let cached = Self::load_cache().await;
 
         match cached {
-            Some(cache) if !cache.is_expired() => {
+            Some(cache) if !cache.is_expired() && !cache.markets.is_empty() => {
                 let count = cache.markets.len();
                 info!("📂 Loaded {} markets from cache (age: {}s)", count, cache.age_secs());
                 return DiscoveryResult {
@@ -103,6 +103,9 @@ impl DiscoveryClient {
                     total_found: count,
                     errors: vec![],
                 };
+            }
+            Some(cache) if cache.markets.is_empty() => {
+                warn!("📂 Cache is empty (age: {}s), refreshing...", cache.age_secs());
             }
             Some(cache) => {
                 info!("📂 Cache expired (age: {}s), refreshing...", cache.age_secs());
