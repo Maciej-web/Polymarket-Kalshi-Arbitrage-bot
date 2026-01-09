@@ -22,7 +22,9 @@ pub const WS_RECONNECT_DELAY_SECS: u64 = 5;
 pub const MIN_LIQUIDITY_USD: f64 = 500.0;
 
 /// Minimum 24h volume to consider a market active (USD)
-pub const MIN_VOLUME_24H_USD: f64 = 100.0;
+/// Increased to $1000 to stay within WebSocket subscription limits (~2000 tokens)
+/// and focus on actively traded markets
+pub const MIN_VOLUME_24H_USD: f64 = 1000.0;
 
 /// Market refresh interval in seconds (2 hours = 7200s)
 /// Bot will re-discover markets every 2 hours to find new opportunities

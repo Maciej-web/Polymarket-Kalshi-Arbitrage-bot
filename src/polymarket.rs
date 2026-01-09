@@ -206,6 +206,18 @@ pub async fn run_ws(
         return Ok(());
     }
 
+    // CRITICAL FIX: Polymarket WebSocket has a subscription limit (~2000 tokens)
+    // If we have more tokens, only subscribe to the first 2000 (top 1000 markets)
+    const MAX_SUBSCRIPTIONS: usize = 2000;
+    let tokens_to_sub = if tokens.len() > MAX_SUBSCRIPTIONS {
+        warn!("[POLY] Too many tokens ({}) - limiting to {} (WebSocket subscription limit)",
+              tokens.len(), MAX_SUBSCRIPTIONS);
+        warn!("[POLY] Consider increasing MIN_VOLUME_24H_USD to reduce market count");
+        &tokens[..MAX_SUBSCRIPTIONS]
+    } else {
+        &tokens[..]
+    };
+
     let (ws_stream, _) = connect_async(POLYMARKET_WS_URL)
         .await
         .context("Failed to connect to Polymarket")?;
@@ -216,12 +228,12 @@ pub async fn run_ws(
 
     // Subscribe
     let subscribe_msg = SubscribeCmd {
-        assets_ids: tokens.clone(),
+        assets_ids: tokens_to_sub.to_vec(),
         sub_type: "market",
     };
 
     write.send(Message::Text(serde_json::to_string(&subscribe_msg)?)).await?;
-    info!("[POLY] Subscribed to {} tokens", tokens.len());
+    info!("[POLY] Subscribed to {} tokens ({} markets)", tokens_to_sub.len(), tokens_to_sub.len() / 2);
 
     let clock = NanoClock::new();
     let mut ping_interval = interval(Duration::from_secs(POLY_PING_INTERVAL_SECS));
