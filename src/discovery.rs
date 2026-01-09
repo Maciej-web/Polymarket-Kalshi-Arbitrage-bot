@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{info, warn};
 
-use crate::config::{GAMMA_API_BASE, TOP_N_MARKETS_BY_LIQUIDITY, MarketCategory};
+use crate::config::{GAMMA_API_BASE, MARKETS_PER_CATEGORY, MarketCategory};
 use crate::types::{MarketPair, DiscoveryResult, GammaMarket};
 
 /// Discovery cache file path
@@ -157,7 +157,7 @@ impl DiscoveryClient {
             categories.iter().map(|c| c.as_str()).collect::<Vec<_>>());
 
         // Convert to MarketPair and filter
-        let mut markets: Vec<MarketPair> = gamma_markets
+        let markets: Vec<MarketPair> = gamma_markets
             .into_iter()
             .filter_map(|gm| self.convert_gamma_market(gm, categories))
             .collect();
@@ -173,15 +173,26 @@ impl DiscoveryClient {
 
         info!("✅ {} markets matched category filters", markets.len());
 
-        // Sort by liquidity (descending)
-        markets.sort_by(|a, b| b.liquidity.partial_cmp(&a.liquidity).unwrap_or(std::cmp::Ordering::Equal));
+        // Group markets by category and take top N per category for balanced distribution
+        use rustc_hash::FxHashMap;
+        let mut by_category: FxHashMap<String, Vec<MarketPair>> = FxHashMap::default();
 
-        // Take top N
-        let top_markets: Vec<MarketPair> = markets.into_iter()
-            .take(TOP_N_MARKETS_BY_LIQUIDITY)
-            .collect();
+        for market in markets {
+            by_category.entry(market.category.to_string())
+                .or_insert_with(Vec::new)
+                .push(market);
+        }
 
-        info!("🏆 Selected top {} markets by liquidity", top_markets.len());
+        // Sort each category by liquidity and take top N per category
+        let mut top_markets: Vec<MarketPair> = Vec::new();
+        for (category, mut category_markets) in by_category {
+            category_markets.sort_by(|a, b| b.liquidity.partial_cmp(&a.liquidity).unwrap_or(std::cmp::Ordering::Equal));
+            let count = category_markets.len().min(MARKETS_PER_CATEGORY);
+            info!("   📂 {}: taking top {} of {} markets", category, count, category_markets.len());
+            top_markets.extend(category_markets.into_iter().take(MARKETS_PER_CATEGORY));
+        }
+
+        info!("🏆 Selected {} total markets ({} per category)", top_markets.len(), MARKETS_PER_CATEGORY);
 
         DiscoveryResult {
             pairs: top_markets.clone(),

@@ -18,8 +18,8 @@ pub const POLY_PING_INTERVAL_SECS: u64 = 30;
 /// WebSocket reconnect delay (seconds)
 pub const WS_RECONNECT_DELAY_SECS: u64 = 5;
 
-/// Top N markets by liquidity to track
-pub const TOP_N_MARKETS_BY_LIQUIDITY: usize = 100;
+/// Markets per category (for balanced distribution)
+pub const MARKETS_PER_CATEGORY: usize = 50;
 
 /// Market categories to monitor
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
