@@ -36,7 +36,8 @@ pub type PriceCents = u16;
 pub type SizeCents = u16;
 
 /// Maximum number of concurrently tracked markets
-pub const MAX_MARKETS: usize = 1024;
+/// Increased to 4096 to support monitoring ALL matching markets (1600-2000+)
+pub const MAX_MARKETS: usize = 4096;
 
 /// Sentinel value indicating no price is currently available
 pub const NO_PRICE: PriceCents = 0;
