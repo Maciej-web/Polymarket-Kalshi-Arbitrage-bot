@@ -192,8 +192,9 @@ impl DiscoveryClient {
 
     /// Convert GammaMarket to MarketPair
     fn convert_gamma_market(&self, market: GammaMarket, categories: &[MarketCategory]) -> Option<MarketPair> {
-        // Check if active and not closed
-        if market.closed == Some(true) || market.active == Some(false) {
+        // Only filter out explicitly closed markets
+        // If active is None or true, we consider it active
+        if market.closed == Some(true) {
             return None;
         }
 
