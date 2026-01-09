@@ -38,14 +38,6 @@ wide = "0.7"
 criterion = { version = "0.5", features = ["html_reports"] }
 hex = "0.4"
 
-[[bin]]
-name = "prediction-market-arbitrage"
-path = "src/main.rs"
-
-[[bin]]
-name = "test_discovery"
-path = "test_discovery.rs"
-
 [profile.release]
 opt-level = 3
 lto = true
