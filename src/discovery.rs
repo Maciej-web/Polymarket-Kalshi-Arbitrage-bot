@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{info, warn};
 
-use crate::config::{GAMMA_API_BASE, MARKETS_PER_CATEGORY, MarketCategory};
+use crate::config::{GAMMA_API_BASE, MARKETS_PER_CATEGORY, MIN_LIQUIDITY_USD, MIN_VOLUME_24H_USD, MarketCategory};
 use crate::types::{MarketPair, DiscoveryResult, GammaMarket};
 
 /// Discovery cache file path
@@ -212,22 +212,40 @@ impl DiscoveryClient {
         let slug = market.slug.as_ref()?.clone();
         let question = market.question.as_ref()?.clone();
 
-        // Determine category from question/slug keywords
-        let category = self.determine_category(&slug, &question, categories)?;
-
-        // Parse token IDs
+        // Parse token IDs - MUST be binary market (exactly 2 outcomes: YES/NO)
         let token_ids: Vec<String> = market.clob_token_ids
             .as_ref()
             .and_then(|s| serde_json::from_str(s).ok())
             .unwrap_or_default();
 
-        if token_ids.len() < 2 {
+        if token_ids.len() != 2 {
+            return None;  // Only binary markets!
+        }
+
+        // Parse liquidity (USD)
+        let liquidity = market.liquidity
+            .as_ref()
+            .and_then(|s| s.parse::<f64>().ok())
+            .unwrap_or(0.0);
+
+        // Filter: minimum liquidity requirement
+        if liquidity < MIN_LIQUIDITY_USD {
             return None;
         }
 
-        // Calculate liquidity (dummy value for now - would need orderbook data)
-        // In a real implementation, you'd fetch this from the CLOB API
-        let liquidity = 10000.0; // Placeholder
+        // Parse 24h volume (USD)
+        let volume_24h = market.volume_24hr
+            .as_ref()
+            .and_then(|s| s.parse::<f64>().ok())
+            .unwrap_or(0.0);
+
+        // Filter: minimum volume requirement (indicates active market)
+        if volume_24h < MIN_VOLUME_24H_USD {
+            return None;
+        }
+
+        // Determine category from question/slug keywords
+        let category = self.determine_category(&slug, &question, categories)?;
 
         Some(MarketPair {
             pair_id: slug.clone().into(),
@@ -247,31 +265,66 @@ impl DiscoveryClient {
         for category in enabled_categories {
             let matched = match category {
                 MarketCategory::Crypto => {
+                    // Expanded crypto keywords
                     text.contains("bitcoin") || text.contains("btc") ||
                     text.contains("ethereum") || text.contains("eth") ||
-                    text.contains("crypto") || text.contains("solana") ||
-                    text.contains("coin") || text.contains("blockchain")
+                    text.contains("crypto") || text.contains("solana") || text.contains("sol") ||
+                    text.contains("coin") || text.contains("blockchain") ||
+                    text.contains("cardano") || text.contains("ada") ||
+                    text.contains("polygon") || text.contains("matic") ||
+                    text.contains("avalanche") || text.contains("avax") ||
+                    text.contains("polkadot") || text.contains("dot") ||
+                    text.contains("chainlink") || text.contains("link") ||
+                    text.contains("ripple") || text.contains("xrp") ||
+                    text.contains("dogecoin") || text.contains("doge") ||
+                    text.contains("shib") || text.contains("shiba") ||
+                    text.contains("defi") || text.contains("nft") ||
+                    text.contains("memecoin") || text.contains("altcoin") ||
+                    text.contains("binance") || text.contains("bnb") ||
+                    text.contains("uniswap") || text.contains("uni") ||
+                    text.contains("pepe") || text.contains("web3")
                 }
                 MarketCategory::Sports => {
                     text.contains("nfl") || text.contains("nba") || text.contains("mlb") ||
                     text.contains("nhl") || text.contains("epl") || text.contains("soccer") ||
                     text.contains("football") || text.contains("basketball") || text.contains("game") ||
                     text.contains("match") || text.contains("team") || text.contains("super bowl") ||
-                    text.contains("champions") || text.contains("playoff")
+                    text.contains("champions") || text.contains("playoff") ||
+                    text.contains("formula") || text.contains("f1") ||
+                    text.contains("tennis") || text.contains("golf") ||
+                    text.contains("boxing") || text.contains("ufc") || text.contains("mma") ||
+                    text.contains("olympics") || text.contains("world cup")
                 }
                 MarketCategory::Politics => {
                     text.contains("election") || text.contains("president") ||
                     text.contains("congress") || text.contains("senate") ||
                     text.contains("trump") || text.contains("biden") ||
                     text.contains("democrat") || text.contains("republican") ||
-                    text.contains("vote") || text.contains("poll") || text.contains("political")
+                    text.contains("vote") || text.contains("poll") || text.contains("political") ||
+                    text.contains("governor") || text.contains("supreme court") ||
+                    text.contains("impeach") || text.contains("cabinet")
                 }
                 MarketCategory::Business => {
-                    text.contains("stock") || text.contains("market") ||
-                    text.contains("economy") || text.contains("fed") ||
-                    text.contains("rate") || text.contains("gdp") ||
-                    text.contains("inflation") || text.contains("recession") ||
-                    text.contains("company") || text.contains("ipo")
+                    // Expanded business/finance keywords
+                    text.contains("stock") || text.contains("share") ||
+                    text.contains("economy") || text.contains("economic") ||
+                    text.contains("fed") || text.contains("federal reserve") ||
+                    text.contains("rate") || text.contains("interest") ||
+                    text.contains("gdp") || text.contains("inflation") ||
+                    text.contains("recession") || text.contains("unemployment") ||
+                    text.contains("company") || text.contains("ipo") ||
+                    text.contains("tesla") || text.contains("apple") ||
+                    text.contains("amazon") || text.contains("google") ||
+                    text.contains("microsoft") || text.contains("meta") ||
+                    text.contains("nvidia") || text.contains("amd") ||
+                    text.contains("s&p") || text.contains("dow") || text.contains("nasdaq") ||
+                    text.contains("earnings") || text.contains("revenue") ||
+                    text.contains("profit") || text.contains("ceo") ||
+                    text.contains("merger") || text.contains("acquisition") ||
+                    text.contains("bank") || text.contains("finance") ||
+                    text.contains("dollar") || text.contains("euro") ||
+                    text.contains("oil") || text.contains("gold") ||
+                    text.contains("commodit") || text.contains("bond")
                 }
             };
 

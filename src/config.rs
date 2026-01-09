@@ -21,6 +21,12 @@ pub const WS_RECONNECT_DELAY_SECS: u64 = 5;
 /// Markets per category (for balanced distribution)
 pub const MARKETS_PER_CATEGORY: usize = 50;
 
+/// Minimum liquidity to consider a market (USD)
+pub const MIN_LIQUIDITY_USD: f64 = 500.0;
+
+/// Minimum 24h volume to consider a market active (USD)
+pub const MIN_VOLUME_24H_USD: f64 = 100.0;
+
 /// Market categories to monitor
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MarketCategory {
