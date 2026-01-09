@@ -206,15 +206,18 @@ pub async fn run_ws(
         return Ok(());
     }
 
-    // CRITICAL FIX: Polymarket WebSocket has a subscription limit
-    // Testing shows ~1000-1500 tokens max before connection reset
-    // Limiting to 1000 tokens (500 markets) to be safe
-    const MAX_SUBSCRIPTIONS: usize = 1000;
-    let tokens_to_sub = if tokens.len() > MAX_SUBSCRIPTIONS {
-        warn!("[POLY] Too many tokens ({}) - limiting to {} (WebSocket subscription limit)",
-              tokens.len(), MAX_SUBSCRIPTIONS);
+    // CRITICAL: Polymarket WebSocket limit = 500 instruments (markets) per connection
+    // 1 instrument = 1 market with YES + NO tokens
+    // Source: https://nautilustrader.io/docs/nightly/integrations/polymarket/
+    const MAX_MARKETS: usize = 500;
+    const MAX_TOKENS: usize = MAX_MARKETS * 2; // 1000 tokens = 500 markets
+
+    let tokens_to_sub = if tokens.len() > MAX_TOKENS {
+        let actual_markets = tokens.len() / 2;
+        warn!("[POLY] Too many markets ({}) - limiting to {} (Polymarket WebSocket limit)",
+              actual_markets, MAX_MARKETS);
         warn!("[POLY] Increase MIN_VOLUME_24H_USD to reduce market count");
-        &tokens[..MAX_SUBSCRIPTIONS]
+        &tokens[..MAX_TOKENS]
     } else {
         &tokens[..]
     };
