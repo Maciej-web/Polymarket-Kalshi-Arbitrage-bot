@@ -38,7 +38,7 @@ use tokio::sync::RwLock;
 use tracing::{error, info, warn};
 
 use circuit_breaker::{CircuitBreaker, CircuitBreakerConfig};
-use config::{ARB_THRESHOLD, WS_RECONNECT_DELAY_SECS, get_enabled_categories};
+use config::{ARB_THRESHOLD, WS_RECONNECT_DELAY_SECS, MARKET_REFRESH_INTERVAL_SECS, get_enabled_categories};
 use discovery::DiscoveryClient;
 use execution::{ExecutionEngine, create_execution_channel, run_execution_loop};
 use polymarket_clob::{PolymarketAsyncClient, PreparedCreds, SharedAsyncClient};
@@ -138,6 +138,7 @@ async fn main() -> Result<()> {
     }
 
     // Build global state
+    let initial_markets = result.pairs.clone();
     let state = Arc::new({
         let mut s = GlobalState::new();
         for pair in result.pairs {
@@ -168,6 +169,66 @@ async fn main() -> Result<()> {
     ));
 
     let exec_handle = tokio::spawn(run_execution_loop(exec_rx, engine));
+
+    // === MARKET REFRESH: Auto-restart on market changes ===
+    // Background task that checks for new markets every MARKET_REFRESH_INTERVAL_SECS
+    // If markets change, bot gracefully exits and should be auto-restarted by systemd/screen
+    let refresh_discovery = DiscoveryClient::new();
+    let refresh_categories = enabled_categories.clone();
+    let refresh_initial_markets = initial_markets;
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(
+            tokio::time::Duration::from_secs(MARKET_REFRESH_INTERVAL_SECS)
+        );
+
+        // Skip first tick (we just did discovery)
+        interval.tick().await;
+
+        loop {
+            interval.tick().await;
+
+            info!("🔄 Market refresh check: discovering new markets...");
+            let new_result = refresh_discovery.discover(&refresh_categories).await;
+
+            if new_result.pairs.is_empty() {
+                warn!("⚠️  Market refresh returned no markets - skipping update");
+                continue;
+            }
+
+            // Compare markets by sorting both lists by pair_id
+            let mut old_ids: Vec<Arc<str>> = refresh_initial_markets.iter()
+                .map(|p| p.pair_id.clone())
+                .collect();
+            old_ids.sort();
+
+            let mut new_ids: Vec<Arc<str>> = new_result.pairs.iter()
+                .map(|p| p.pair_id.clone())
+                .collect();
+            new_ids.sort();
+
+            if old_ids != new_ids {
+                let added = new_ids.iter()
+                    .filter(|id| !old_ids.contains(id))
+                    .count();
+                let removed = old_ids.iter()
+                    .filter(|id| !new_ids.contains(id))
+                    .count();
+
+                warn!("🔄 Market changes detected!");
+                warn!("   Markets changed: {} added, {} removed", added, removed);
+                warn!("   Old count: {}, New count: {}", old_ids.len(), new_ids.len());
+                warn!("   Bot will exit and auto-restart with new markets...");
+
+                // Give time to flush logs
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+                // Exit cleanly - systemd/screen will auto-restart
+                std::process::exit(0);
+            } else {
+                info!("✅ Market refresh: no changes detected ({} markets)", old_ids.len());
+            }
+        }
+    });
 
     // === TEST MODE: Synthetic arbitrage injection ===
     // TEST_ARB=1 to enable
