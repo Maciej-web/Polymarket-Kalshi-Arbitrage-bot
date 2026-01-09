@@ -59,11 +59,13 @@ struct SubscribeCmd {
 
 // === Gamma API Client ===
 
+#[allow(dead_code)]
 pub struct GammaClient {
     http: reqwest::Client,
 }
 
 impl GammaClient {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             http: reqwest::Client::builder()
@@ -75,6 +77,7 @@ impl GammaClient {
     
     /// Look up Polymarket market by slug, return (yes_token, no_token)
     /// Tries both the exact date and next day (timezone handling)
+    #[allow(dead_code)]
     pub async fn lookup_market(&self, slug: &str) -> Result<Option<(String, String)>> {
         // Try exact slug first
         if let Some(tokens) = self.try_lookup_slug(slug).await? {
@@ -92,6 +95,7 @@ impl GammaClient {
         Ok(None)
     }
     
+    #[allow(dead_code)]
     async fn try_lookup_slug(&self, slug: &str) -> Result<Option<(String, String)>> {
         let url = format!("{}/markets?slug={}", GAMMA_API_BASE, slug);
         
@@ -128,6 +132,7 @@ impl GammaClient {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 struct GammaMarket {
     #[serde(rename = "clobTokenIds")]
@@ -138,6 +143,7 @@ struct GammaMarket {
 
 /// Increment the date in a Polymarket slug by 1 day
 /// e.g., "epl-che-avl-2025-12-08" -> "epl-che-avl-2025-12-09"
+#[allow(dead_code)]
 fn increment_date_in_slug(slug: &str) -> Option<String> {
     let parts: Vec<&str> = slug.split('-').collect();
     if parts.len() < 6 {

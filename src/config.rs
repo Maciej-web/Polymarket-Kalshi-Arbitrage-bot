@@ -18,9 +18,6 @@ pub const POLY_PING_INTERVAL_SECS: u64 = 30;
 /// WebSocket reconnect delay (seconds)
 pub const WS_RECONNECT_DELAY_SECS: u64 = 5;
 
-/// Market discovery refresh interval (seconds) - check for new markets every 5 minutes
-pub const DISCOVERY_REFRESH_INTERVAL_SECS: u64 = 300;
-
 /// Top N markets by liquidity to track
 pub const TOP_N_MARKETS_BY_LIQUIDITY: usize = 100;
 

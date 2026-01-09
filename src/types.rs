@@ -10,30 +10,6 @@ use rustc_hash::FxHashMap;
 
 // === Market Types ===
 
-/// Market category for a matched trading pair
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum MarketType {
-    /// Moneyline/outright winner market
-    Moneyline,
-    /// Point spread market
-    Spread,
-    /// Total/over-under market
-    Total,
-    /// Both teams to score market
-    Btts,
-}
-
-impl std::fmt::Display for MarketType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MarketType::Moneyline => write!(f, "moneyline"),
-            MarketType::Spread => write!(f, "spread"),
-            MarketType::Total => write!(f, "total"),
-            MarketType::Btts => write!(f, "btts"),
-        }
-    }
-}
-
 /// A Polymarket trading market
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MarketPair {
@@ -103,6 +79,7 @@ impl AtomicOrderbook {
 
     /// Store new state
     #[inline(always)]
+    #[allow(dead_code)]
     pub fn store(&self, yes_ask: PriceCents, no_ask: PriceCents, yes_size: SizeCents, no_size: SizeCents) {
         self.packed.store(pack_orderbook(yes_ask, no_ask, yes_size, no_size), Ordering::Release);
     }
