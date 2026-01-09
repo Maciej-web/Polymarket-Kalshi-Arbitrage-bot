@@ -27,6 +27,8 @@ pub struct MarketPair {
     pub poly_no_token: Arc<str>,
     /// Liquidity in USD (for sorting/filtering)
     pub liquidity: f64,
+    /// 24h trading volume in USD (for ranking most active markets)
+    pub volume_24hr: f64,
 }
 
 /// Price representation in cents (1-99 for $0.01-$0.99), 0 indicates no price available

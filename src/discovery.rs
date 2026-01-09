@@ -273,6 +273,7 @@ impl DiscoveryClient {
             poly_yes_token: token_ids[0].clone().into(),
             poly_no_token: token_ids[1].clone().into(),
             liquidity,
+            volume_24hr: volume_24h,
         })
     }
 
