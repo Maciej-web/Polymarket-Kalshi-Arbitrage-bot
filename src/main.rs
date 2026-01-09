@@ -230,6 +230,37 @@ async fn main() -> Result<()> {
         }
     });
 
+    // === DYNAMIC POSITION SIZING: Update limits based on balance ===
+    // Background task that updates position sizing daily based on USDC balance
+    // Set BALANCE_USD in .env or it defaults to $1000
+    let balance_circuit_breaker = circuit_breaker.clone();
+    tokio::spawn(async move {
+        // Initial balance update
+        let initial_balance = std::env::var("BALANCE_USD")
+            .ok()
+            .and_then(|v| v.parse::<f64>().ok())
+            .unwrap_or(1000.0);
+
+        info!("💰 Initial balance: ${:.2} - updating position limits...", initial_balance);
+        balance_circuit_breaker.update_limits_from_balance(initial_balance).await;
+
+        // Update every 24 hours
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(24 * 60 * 60));
+        interval.tick().await; // Skip first tick
+
+        loop {
+            interval.tick().await;
+
+            let balance = std::env::var("BALANCE_USD")
+                .ok()
+                .and_then(|v| v.parse::<f64>().ok())
+                .unwrap_or(1000.0);
+
+            info!("💰 Daily balance check: ${:.2} - updating position limits...", balance);
+            balance_circuit_breaker.update_limits_from_balance(balance).await;
+        }
+    });
+
     // === TEST MODE: Synthetic arbitrage injection ===
     // TEST_ARB=1 to enable
     let test_arb = std::env::var("TEST_ARB").map(|v| v == "1" || v == "true").unwrap_or(false);

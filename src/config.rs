@@ -9,17 +9,14 @@ pub const POLYMARKET_WS_URL: &str = "wss://ws-subscriptions-clob.polymarket.com/
 /// Gamma API base URL (Polymarket market data)
 pub const GAMMA_API_BASE: &str = "https://gamma-api.polymarket.com";
 
-/// Arb threshold: alert when total cost < this (e.g., 0.995 = 0.5% profit)
-pub const ARB_THRESHOLD: f64 = 0.995;
+/// Arb threshold: alert when total cost < this (e.g., 0.992 = 0.8% profit)
+pub const ARB_THRESHOLD: f64 = 0.992;
 
 /// Polymarket ping interval (seconds) - keep connection alive
 pub const POLY_PING_INTERVAL_SECS: u64 = 30;
 
 /// WebSocket reconnect delay (seconds)
 pub const WS_RECONNECT_DELAY_SECS: u64 = 5;
-
-/// Markets per category (for balanced distribution)
-pub const MARKETS_PER_CATEGORY: usize = 100;
 
 /// Minimum liquidity to consider a market (USD)
 pub const MIN_LIQUIDITY_USD: f64 = 500.0;
@@ -60,15 +57,6 @@ impl MarketCategory {
             _ => None,
         }
     }
-
-    pub fn all() -> &'static [MarketCategory] {
-        &[
-            MarketCategory::Crypto,
-            MarketCategory::Sports,
-            MarketCategory::Politics,
-            MarketCategory::Business,
-        ]
-    }
 }
 
 impl std::fmt::Display for MarketCategory {
@@ -79,11 +67,12 @@ impl std::fmt::Display for MarketCategory {
 
 /// Get enabled market categories from environment variable
 /// Format: ENABLED_CATEGORIES="crypto,sports,politics"
-/// If not set, returns all categories
+/// If not set, defaults to sports + politics only
 pub fn get_enabled_categories() -> Vec<MarketCategory> {
     if let Ok(categories_str) = std::env::var("ENABLED_CATEGORIES") {
         if categories_str.is_empty() {
-            return MarketCategory::all().to_vec();
+            // Default to sports + politics
+            return vec![MarketCategory::Sports, MarketCategory::Politics];
         }
 
         categories_str
@@ -91,7 +80,8 @@ pub fn get_enabled_categories() -> Vec<MarketCategory> {
             .filter_map(|s| MarketCategory::from_str(s.trim()))
             .collect()
     } else {
-        MarketCategory::all().to_vec()
+        // Default: sports + politics only
+        vec![MarketCategory::Sports, MarketCategory::Politics]
     }
 }
 

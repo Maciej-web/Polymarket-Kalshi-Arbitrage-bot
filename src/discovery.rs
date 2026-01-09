@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{info, warn};
 
-use crate::config::{GAMMA_API_BASE, MARKETS_PER_CATEGORY, MIN_LIQUIDITY_USD, MIN_VOLUME_24H_USD, MarketCategory};
+use crate::config::{GAMMA_API_BASE, MIN_LIQUIDITY_USD, MIN_VOLUME_24H_USD, MarketCategory};
 use crate::types::{MarketPair, DiscoveryResult, GammaMarket};
 
 /// Discovery cache file path
@@ -121,43 +121,74 @@ impl DiscoveryClient {
         result
     }
 
-    /// Full discovery - fetch all markets and filter
+    /// Full discovery - fetch ALL markets with pagination
     async fn discover_full(&self, categories: &[MarketCategory]) -> DiscoveryResult {
-        info!("🔍 Fetching Polymarket markets from {}/markets", GAMMA_API_BASE);
+        info!("🔍 Fetching ALL Polymarket markets with pagination from {}/markets", GAMMA_API_BASE);
 
-        // Fetch all markets from Gamma API with high limit
-        let url = format!("{}/markets?limit=10000&closed=false", GAMMA_API_BASE);
+        // Fetch markets in chunks of 500 until we get less than 500 (meaning we're done)
+        const CHUNK_SIZE: usize = 500;
+        let mut all_markets: Vec<GammaMarket> = Vec::new();
+        let mut offset = 0;
 
-        let resp = match self.http.get(&url).send().await {
-            Ok(r) => r,
-            Err(e) => {
-                warn!("❌ API request failed: {}", e);
-                return DiscoveryResult {
-                    pairs: vec![],
-                    total_found: 0,
-                    errors: vec![format!("Failed to fetch markets: {}", e)],
-                };
+        loop {
+            let url = format!("{}/markets?limit={}&offset={}&closed=false",
+                            GAMMA_API_BASE, CHUNK_SIZE, offset);
+
+            info!("   Fetching chunk: offset={}, limit={}", offset, CHUNK_SIZE);
+
+            let resp = match self.http.get(&url).send().await {
+                Ok(r) => r,
+                Err(e) => {
+                    warn!("❌ API request failed at offset {}: {}", offset, e);
+                    if all_markets.is_empty() {
+                        return DiscoveryResult {
+                            pairs: vec![],
+                            total_found: 0,
+                            errors: vec![format!("Failed to fetch markets: {}", e)],
+                        };
+                    }
+                    // If we already have some markets, continue with what we have
+                    warn!("⚠️  Continuing with {} markets fetched so far", all_markets.len());
+                    break;
+                }
+            };
+
+            let chunk: Vec<GammaMarket> = match resp.json().await {
+                Ok(m) => m,
+                Err(e) => {
+                    warn!("❌ Failed to parse JSON at offset {}: {}", offset, e);
+                    if all_markets.is_empty() {
+                        return DiscoveryResult {
+                            pairs: vec![],
+                            total_found: 0,
+                            errors: vec![format!("Failed to parse markets: {}", e)],
+                        };
+                    }
+                    warn!("⚠️  Continuing with {} markets fetched so far", all_markets.len());
+                    break;
+                }
+            };
+
+            let chunk_len = chunk.len();
+            all_markets.extend(chunk);
+
+            info!("   ✓ Fetched {} markets (total so far: {})", chunk_len, all_markets.len());
+
+            // If we got less than CHUNK_SIZE, we've reached the end
+            if chunk_len < CHUNK_SIZE {
+                info!("   📊 Reached end of markets (chunk size {} < {})", chunk_len, CHUNK_SIZE);
+                break;
             }
-        };
 
-        let gamma_markets: Vec<GammaMarket> = match resp.json().await {
-            Ok(m) => m,
-            Err(e) => {
-                warn!("❌ Failed to parse JSON response: {}", e);
-                return DiscoveryResult {
-                    pairs: vec![],
-                    total_found: 0,
-                    errors: vec![format!("Failed to parse markets: {}", e)],
-                };
-            }
-        };
+            offset += CHUNK_SIZE;
+        }
 
-        info!("📊 Fetched {} markets, filtering by categories: {:?}",
-            gamma_markets.len(),
+        info!("📊 Total fetched: {} markets, filtering by categories: {:?}",
+            all_markets.len(),
             categories.iter().map(|c| c.as_str()).collect::<Vec<_>>());
 
-        // Convert to MarketPair and filter
-        let markets: Vec<MarketPair> = gamma_markets
+        // Convert to MarketPair and filter - KEEP ALL matching markets (no top-N limit!)
+        let markets: Vec<MarketPair> = all_markets
             .into_iter()
             .filter_map(|gm| self.convert_gamma_market(gm, categories))
             .collect();
@@ -171,32 +202,25 @@ impl DiscoveryClient {
             };
         }
 
-        info!("✅ {} markets matched category filters", markets.len());
+        // Sort ALL markets by liquidity (highest first) for better display
+        let mut sorted_markets = markets;
+        sorted_markets.sort_by(|a, b| b.liquidity.partial_cmp(&a.liquidity).unwrap_or(std::cmp::Ordering::Equal));
 
-        // Group markets by category and take top N per category for balanced distribution
+        // Count by category for stats
         use rustc_hash::FxHashMap;
-        let mut by_category: FxHashMap<String, Vec<MarketPair>> = FxHashMap::default();
-
-        for market in markets {
-            by_category.entry(market.category.to_string())
-                .or_insert_with(Vec::new)
-                .push(market);
+        let mut category_counts: FxHashMap<String, usize> = FxHashMap::default();
+        for market in &sorted_markets {
+            *category_counts.entry(market.category.to_string()).or_insert(0) += 1;
         }
 
-        // Sort each category by liquidity and take top N per category
-        let mut top_markets: Vec<MarketPair> = Vec::new();
-        for (category, mut category_markets) in by_category {
-            category_markets.sort_by(|a, b| b.liquidity.partial_cmp(&a.liquidity).unwrap_or(std::cmp::Ordering::Equal));
-            let count = category_markets.len().min(MARKETS_PER_CATEGORY);
-            info!("   📂 {}: taking top {} of {} markets", category, count, category_markets.len());
-            top_markets.extend(category_markets.into_iter().take(MARKETS_PER_CATEGORY));
+        info!("✅ Monitoring ALL {} markets that match criteria:", sorted_markets.len());
+        for (category, count) in category_counts.iter() {
+            info!("   📂 {}: {} markets", category, count);
         }
-
-        info!("🏆 Selected {} total markets ({} per category)", top_markets.len(), MARKETS_PER_CATEGORY);
 
         DiscoveryResult {
-            pairs: top_markets.clone(),
-            total_found: top_markets.len(),
+            pairs: sorted_markets.clone(),
+            total_found: sorted_markets.len(),
             errors: vec![],
         }
     }

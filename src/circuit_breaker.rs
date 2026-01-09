@@ -120,23 +120,23 @@ impl MarketPosition {
 
 /// Circuit breaker state
 pub struct CircuitBreaker {
-    config: CircuitBreakerConfig,
-    
+    config: RwLock<CircuitBreakerConfig>,
+
     /// Whether trading is currently halted
     halted: AtomicBool,
-    
+
     /// When the circuit breaker was tripped
     tripped_at: RwLock<Option<Instant>>,
-    
+
     /// Reason for trip
     trip_reason: RwLock<Option<TripReason>>,
-    
+
     /// Consecutive error count
     consecutive_errors: AtomicI64,
-    
+
     /// Daily P&L tracking (in cents)
     daily_pnl_cents: AtomicI64,
-    
+
     /// Positions per market
     positions: RwLock<std::collections::HashMap<String, MarketPosition>>,
 }
@@ -150,9 +150,9 @@ impl CircuitBreaker {
         info!("[CB]   Max daily loss: ${:.2}", config.max_daily_loss);
         info!("[CB]   Max consecutive errors: {}", config.max_consecutive_errors);
         info!("[CB]   Cooldown: {}s", config.cooldown_secs);
-        
+
         Self {
-            config,
+            config: RwLock::new(config),
             halted: AtomicBool::new(false),
             tripped_at: RwLock::new(None),
             trip_reason: RwLock::new(None),
@@ -161,60 +161,83 @@ impl CircuitBreaker {
             positions: RwLock::new(std::collections::HashMap::new()),
         }
     }
+
+    /// Update position limits based on current balance (for dynamic sizing)
+    /// Recommended: call this daily or when balance changes significantly
+    /// - max_daily_loss = balance * 0.05 (5%)
+    /// - max_position_per_market = balance * 0.02 (2%)
+    pub async fn update_limits_from_balance(&self, balance_usd: f64) {
+        let mut config = self.config.write().await;
+
+        // Dynamic limits based on balance
+        let new_daily_loss = (balance_usd * 0.05).max(50.0); // Min $50
+        let new_position_per_market = ((balance_usd * 0.02) as i64).max(10);  // Min 10 contracts
+
+        info!("[CB] 💰 Updating limits based on balance: ${:.2}", balance_usd);
+        info!("[CB]   Max daily loss: ${:.2} -> ${:.2}", config.max_daily_loss, new_daily_loss);
+        info!("[CB]   Max position per market: {} -> {} contracts",
+              config.max_position_per_market, new_position_per_market);
+
+        config.max_daily_loss = new_daily_loss;
+        config.max_position_per_market = new_position_per_market;
+        config.max_total_position = new_position_per_market * 5; // 5x per-market limit
+    }
     
     /// Check if trading is allowed
     #[allow(dead_code)]
-    pub fn is_trading_allowed(&self) -> bool {
-        if !self.config.enabled {
+    pub async fn is_trading_allowed(&self) -> bool {
+        let config = self.config.read().await;
+        if !config.enabled {
             return true;
         }
         !self.halted.load(Ordering::SeqCst)
     }
-    
+
     /// Check if we can execute a trade for a specific market
     pub async fn can_execute(&self, market_id: &str, contracts: i64) -> Result<(), TripReason> {
-        if !self.config.enabled {
+        let config = self.config.read().await;
+        if !config.enabled {
             return Ok(());
         }
-        
+
         if self.halted.load(Ordering::SeqCst) {
             let reason = self.trip_reason.read().await;
             return Err(reason.clone().unwrap_or(TripReason::ManualHalt));
         }
-        
+
         // Check position limits
         let positions = self.positions.read().await;
-        
+
         // Per-market limit
         if let Some(pos) = positions.get(market_id) {
             let new_position = pos.total_contracts() + contracts;
-            if new_position > self.config.max_position_per_market {
+            if new_position > config.max_position_per_market {
                 return Err(TripReason::MaxPositionPerMarket {
                     market: market_id.to_string(),
                     position: new_position,
-                    limit: self.config.max_position_per_market,
+                    limit: config.max_position_per_market,
                 });
             }
         }
-        
+
         // Total position limit
         let total: i64 = positions.values().map(|p| p.total_contracts()).sum();
-        if total + contracts > self.config.max_total_position {
+        if total + contracts > config.max_total_position {
             return Err(TripReason::MaxTotalPosition {
                 position: total + contracts,
-                limit: self.config.max_total_position,
+                limit: config.max_total_position,
             });
         }
-        
+
         // Daily loss limit
         let daily_loss = -self.daily_pnl_cents.load(Ordering::SeqCst) as f64 / 100.0;
-        if daily_loss > self.config.max_daily_loss {
+        if daily_loss > config.max_daily_loss {
             return Err(TripReason::MaxDailyLoss {
                 loss: daily_loss,
-                limit: self.config.max_daily_loss,
+                limit: config.max_daily_loss,
             });
         }
-        
+
         Ok(())
     }
     
@@ -237,11 +260,14 @@ impl CircuitBreaker {
     /// Record an error
     pub async fn record_error(&self) {
         let errors = self.consecutive_errors.fetch_add(1, Ordering::SeqCst) + 1;
-        
-        if errors >= self.config.max_consecutive_errors as i64 {
+
+        let config = self.config.read().await;
+        if errors >= config.max_consecutive_errors as i64 {
+            let limit = config.max_consecutive_errors;
+            drop(config); // Release lock before trip
             self.trip(TripReason::ConsecutiveErrors {
                 count: errors as u32,
-                limit: self.config.max_consecutive_errors,
+                limit,
             }).await;
         }
     }
@@ -255,12 +281,14 @@ impl CircuitBreaker {
 
     /// Trip the circuit breaker
     pub async fn trip(&self, reason: TripReason) {
-        if !self.config.enabled {
+        let config = self.config.read().await;
+        if !config.enabled {
             return;
         }
-        
+        drop(config);
+
         error!("🚨 CIRCUIT BREAKER TRIPPED: {}", reason);
-        
+
         self.halted.store(true, Ordering::SeqCst);
         *self.tripped_at.write().await = Some(Instant::now());
         *self.trip_reason.write().await = Some(reason);
@@ -299,7 +327,11 @@ impl CircuitBreaker {
 
         let tripped_at = self.tripped_at.read().await;
         if let Some(tripped) = *tripped_at {
-            if tripped.elapsed() > Duration::from_secs(self.config.cooldown_secs) {
+            let config = self.config.read().await;
+            let cooldown_secs = config.cooldown_secs;
+            drop(config);
+
+            if tripped.elapsed() > Duration::from_secs(cooldown_secs) {
                 drop(tripped_at); // Release read lock before reset
                 self.reset().await;
                 return true;
@@ -312,11 +344,12 @@ impl CircuitBreaker {
     /// Get current status
     #[allow(dead_code)]
     pub async fn status(&self) -> CircuitBreakerStatus {
+        let config = self.config.read().await;
         let positions = self.positions.read().await;
         let total_position: i64 = positions.values().map(|p| p.total_contracts()).sum();
-        
+
         CircuitBreakerStatus {
-            enabled: self.config.enabled,
+            enabled: config.enabled,
             halted: self.halted.load(Ordering::SeqCst),
             trip_reason: self.trip_reason.read().await.clone(),
             consecutive_errors: self.consecutive_errors.load(Ordering::SeqCst) as u32,
