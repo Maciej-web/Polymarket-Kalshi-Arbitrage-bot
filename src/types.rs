@@ -831,6 +831,29 @@ mod tests {
 
 // === Polymarket/Gamma API Types ===
 
+/// Helper to deserialize f64 from either number or string
+fn deserialize_f64_flexible<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrNumber {
+        String(String),
+        Number(f64),
+    }
+
+    match Option::<StringOrNumber>::deserialize(deserializer)? {
+        Some(StringOrNumber::String(s)) => s.parse::<f64>()
+            .map(Some)
+            .map_err(|e| D::Error::custom(format!("Failed to parse float: {}", e))),
+        Some(StringOrNumber::Number(n)) => Ok(Some(n)),
+        None => Ok(None),
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 pub struct GammaMarket {
@@ -843,10 +866,13 @@ pub struct GammaMarket {
     pub outcome_prices: Option<String>,
     pub active: Option<bool>,
     pub closed: Option<bool>,
-    pub liquidity: Option<f64>,      // Total liquidity (USD number)
-    pub volume: Option<f64>,         // Total volume (USD number)
+    #[serde(deserialize_with = "deserialize_f64_flexible")]
+    pub liquidity: Option<f64>,      // Total liquidity (USD, can be string or number)
+    #[serde(deserialize_with = "deserialize_f64_flexible")]
+    pub volume: Option<f64>,         // Total volume (USD, can be string or number)
     #[serde(rename = "volume24hr")]
-    pub volume_24hr: Option<f64>,    // 24h volume (USD number)
+    #[serde(deserialize_with = "deserialize_f64_flexible")]
+    pub volume_24hr: Option<f64>,    // 24h volume (USD, can be string or number)
 }
 
 // === Discovery Result ===
