@@ -222,22 +222,16 @@ impl DiscoveryClient {
             return None;  // Only binary markets!
         }
 
-        // Parse liquidity (USD)
-        let liquidity = market.liquidity
-            .as_ref()
-            .and_then(|s| s.parse::<f64>().ok())
-            .unwrap_or(0.0);
+        // Get liquidity (USD)
+        let liquidity = market.liquidity.unwrap_or(0.0);
 
         // Filter: minimum liquidity requirement
         if liquidity < MIN_LIQUIDITY_USD {
             return None;
         }
 
-        // Parse 24h volume (USD)
-        let volume_24h = market.volume_24hr
-            .as_ref()
-            .and_then(|s| s.parse::<f64>().ok())
-            .unwrap_or(0.0);
+        // Get 24h volume (USD)
+        let volume_24h = market.volume_24hr.unwrap_or(0.0);
 
         // Filter: minimum volume requirement (indicates active market)
         if volume_24h < MIN_VOLUME_24H_USD {

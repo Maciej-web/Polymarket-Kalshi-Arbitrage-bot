@@ -843,10 +843,10 @@ pub struct GammaMarket {
     pub outcome_prices: Option<String>,
     pub active: Option<bool>,
     pub closed: Option<bool>,
-    pub liquidity: Option<String>,  // Total liquidity (USD string)
-    pub volume: Option<String>,      // Total volume (USD string)
+    pub liquidity: Option<f64>,      // Total liquidity (USD number)
+    pub volume: Option<f64>,         // Total volume (USD number)
     #[serde(rename = "volume24hr")]
-    pub volume_24hr: Option<String>, // 24h volume (USD string)
+    pub volume_24hr: Option<f64>,    // 24h volume (USD number)
 }
 
 // === Discovery Result ===
