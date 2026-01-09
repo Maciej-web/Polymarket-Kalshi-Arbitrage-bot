@@ -19,7 +19,7 @@ pub const POLY_PING_INTERVAL_SECS: u64 = 30;
 pub const WS_RECONNECT_DELAY_SECS: u64 = 5;
 
 /// Markets per category (for balanced distribution)
-pub const MARKETS_PER_CATEGORY: usize = 50;
+pub const MARKETS_PER_CATEGORY: usize = 100;
 
 /// Minimum liquidity to consider a market (USD)
 pub const MIN_LIQUIDITY_USD: f64 = 500.0;
