@@ -206,13 +206,14 @@ pub async fn run_ws(
         return Ok(());
     }
 
-    // CRITICAL FIX: Polymarket WebSocket has a subscription limit (~2000 tokens)
-    // If we have more tokens, only subscribe to the first 2000 (top 1000 markets)
-    const MAX_SUBSCRIPTIONS: usize = 2000;
+    // CRITICAL FIX: Polymarket WebSocket has a subscription limit
+    // Testing shows ~1000-1500 tokens max before connection reset
+    // Limiting to 1000 tokens (500 markets) to be safe
+    const MAX_SUBSCRIPTIONS: usize = 1000;
     let tokens_to_sub = if tokens.len() > MAX_SUBSCRIPTIONS {
         warn!("[POLY] Too many tokens ({}) - limiting to {} (WebSocket subscription limit)",
               tokens.len(), MAX_SUBSCRIPTIONS);
-        warn!("[POLY] Consider increasing MIN_VOLUME_24H_USD to reduce market count");
+        warn!("[POLY] Increase MIN_VOLUME_24H_USD to reduce market count");
         &tokens[..MAX_SUBSCRIPTIONS]
     } else {
         &tokens[..]
