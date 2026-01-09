@@ -29,6 +29,7 @@ pub const MIN_VOLUME_24H_USD: f64 = 100.0;
 
 /// Market refresh interval in seconds (2 hours = 7200s)
 /// Bot will re-discover markets every 2 hours to find new opportunities
+#[allow(dead_code)]
 pub const MARKET_REFRESH_INTERVAL_SECS: u64 = 2 * 60 * 60;
 
 /// Market categories to monitor
