@@ -112,13 +112,19 @@ async fn main() -> Result<()> {
     info!("   - Total markets found: {}", result.total_found);
 
     if !result.errors.is_empty() {
+        warn!("⚠️  Discovery errors:");
         for err in &result.errors {
-            warn!("   ⚠️ {}", err);
+            warn!("   - {}", err);
         }
     }
 
     if result.pairs.is_empty() {
-        error!("No market pairs found!");
+        error!("❌ No market pairs found!");
+        error!("   Possible causes:");
+        error!("   1. API connection failed (check network and API endpoint)");
+        error!("   2. All markets filtered out by category matching");
+        error!("   3. All markets closed/inactive");
+        error!("   Check the logs above for detailed conversion statistics.");
         return Ok(());
     }
 

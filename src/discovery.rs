@@ -51,6 +51,16 @@ fn current_unix_secs() -> u64 {
         .as_secs()
 }
 
+/// Statistics for market conversion debugging
+#[derive(Default, Debug)]
+struct ConversionStats {
+    total: usize,
+    closed_or_inactive: usize,
+    missing_fields: usize,
+    no_category_match: usize,
+    invalid_tokens: usize,
+}
+
 /// Polymarket-only discovery client
 pub struct DiscoveryClient {
     http: reqwest::Client,
@@ -121,13 +131,19 @@ impl DiscoveryClient {
     /// Full discovery - fetch all markets and filter
     async fn discover_full(&self, categories: &[MarketCategory]) -> DiscoveryResult {
         info!("🔍 Fetching all Polymarket markets...");
+        info!("   API endpoint: {}/markets", GAMMA_API_BASE);
+        info!("   Enabled categories: {:?}", categories.iter().map(|c| c.as_str()).collect::<Vec<_>>());
 
         // Fetch all markets from Gamma API
         let url = format!("{}/markets", GAMMA_API_BASE);
 
         let resp = match self.http.get(&url).send().await {
-            Ok(r) => r,
+            Ok(r) => {
+                info!("   ✅ API request successful (status: {})", r.status());
+                r
+            }
             Err(e) => {
+                warn!("   ❌ API request failed: {}", e);
                 return DiscoveryResult {
                     pairs: vec![],
                     total_found: 0,
@@ -139,6 +155,7 @@ impl DiscoveryClient {
         let gamma_markets: Vec<GammaMarket> = match resp.json().await {
             Ok(m) => m,
             Err(e) => {
+                warn!("   ❌ Failed to parse JSON response: {}", e);
                 return DiscoveryResult {
                     pairs: vec![],
                     total_found: 0,
@@ -149,13 +166,33 @@ impl DiscoveryClient {
 
         info!("📊 Fetched {} raw markets from Gamma API", gamma_markets.len());
 
-        // Convert to MarketPair and filter
+        // Convert to MarketPair and filter (with detailed stats)
+        let mut stats = ConversionStats::default();
         let mut markets: Vec<MarketPair> = gamma_markets
             .into_iter()
-            .filter_map(|gm| self.convert_gamma_market(gm, categories))
+            .filter_map(|gm| {
+                match self.convert_gamma_market_with_stats(gm, categories, &mut stats) {
+                    Some(pair) => Some(pair),
+                    None => None,
+                }
+            })
             .collect();
 
-        info!("✅ {} markets passed category filter", markets.len());
+        info!("📈 Conversion statistics:");
+        info!("   - Total raw markets: {}", stats.total);
+        info!("   - Closed/inactive: {}", stats.closed_or_inactive);
+        info!("   - Missing required fields: {}", stats.missing_fields);
+        info!("   - No matching category: {}", stats.no_category_match);
+        info!("   - Invalid token IDs: {}", stats.invalid_tokens);
+        info!("   ✅ Converted successfully: {}", markets.len());
+
+        if markets.is_empty() {
+            warn!("⚠️  No markets passed filtering! Check category configuration.");
+            if stats.no_category_match > 0 {
+                warn!("   Hint: {} markets were filtered out by category matching", stats.no_category_match);
+                warn!("   Try expanding ENABLED_CATEGORIES or checking keyword matching logic");
+            }
+        }
 
         // Sort by liquidity (descending)
         markets.sort_by(|a, b| b.liquidity.partial_cmp(&a.liquidity).unwrap_or(std::cmp::Ordering::Equal));
@@ -172,6 +209,72 @@ impl DiscoveryClient {
             total_found: top_markets.len(),
             errors: vec![],
         }
+    }
+
+    /// Convert GammaMarket to MarketPair with statistics tracking
+    fn convert_gamma_market_with_stats(
+        &self,
+        market: GammaMarket,
+        categories: &[MarketCategory],
+        stats: &mut ConversionStats,
+    ) -> Option<MarketPair> {
+        stats.total += 1;
+
+        // Check if active and not closed
+        if market.closed == Some(true) || market.active == Some(false) {
+            stats.closed_or_inactive += 1;
+            return None;
+        }
+
+        let slug = match market.slug.as_ref() {
+            Some(s) => s.clone(),
+            None => {
+                stats.missing_fields += 1;
+                return None;
+            }
+        };
+
+        let question = match market.question.as_ref() {
+            Some(q) => q.clone(),
+            None => {
+                stats.missing_fields += 1;
+                return None;
+            }
+        };
+
+        // Determine category from question/slug keywords
+        let category = match self.determine_category(&slug, &question, categories) {
+            Some(c) => c,
+            None => {
+                stats.no_category_match += 1;
+                return None;
+            }
+        };
+
+        // Parse token IDs
+        let token_ids: Vec<String> = market.clob_token_ids
+            .as_ref()
+            .and_then(|s| serde_json::from_str(s).ok())
+            .unwrap_or_default();
+
+        if token_ids.len() < 2 {
+            stats.invalid_tokens += 1;
+            return None;
+        }
+
+        // Calculate liquidity (dummy value for now - would need orderbook data)
+        // In a real implementation, you'd fetch this from the CLOB API
+        let liquidity = 10000.0; // Placeholder
+
+        Some(MarketPair {
+            pair_id: slug.clone().into(),
+            category: category.as_str().into(),
+            description: question.into(),
+            poly_slug: slug.into(),
+            poly_yes_token: token_ids[0].clone().into(),
+            poly_no_token: token_ids[1].clone().into(),
+            liquidity,
+        })
     }
 
     /// Convert GammaMarket to MarketPair
