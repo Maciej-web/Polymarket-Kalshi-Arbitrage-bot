@@ -56,7 +56,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("arb_bot=info".parse().unwrap()),
+                .add_directive("prediction_market_arbitrage=info".parse().unwrap()),
         )
         .init();
 

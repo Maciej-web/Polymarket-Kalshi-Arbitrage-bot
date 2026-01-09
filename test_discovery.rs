@@ -8,6 +8,7 @@ async fn main() {
     // Initialize logging with more verbose output
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
+        .with_target(false)
         .init();
 
     println!("=== POLYMARKET MARKET DISCOVERY TEST ===\n");
