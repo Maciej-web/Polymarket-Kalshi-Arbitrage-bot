@@ -125,8 +125,8 @@ impl DiscoveryClient {
     async fn discover_full(&self, categories: &[MarketCategory]) -> DiscoveryResult {
         info!("🔍 Fetching Polymarket markets from {}/markets", GAMMA_API_BASE);
 
-        // Fetch all markets from Gamma API
-        let url = format!("{}/markets", GAMMA_API_BASE);
+        // Fetch all markets from Gamma API with high limit
+        let url = format!("{}/markets?limit=10000&closed=false", GAMMA_API_BASE);
 
         let resp = match self.http.get(&url).send().await {
             Ok(r) => r,
