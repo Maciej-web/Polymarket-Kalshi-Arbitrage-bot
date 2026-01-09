@@ -119,12 +119,8 @@ async fn main() -> Result<()> {
     }
 
     if result.pairs.is_empty() {
-        error!("❌ No market pairs found!");
-        error!("   Possible causes:");
-        error!("   1. API connection failed (check network and API endpoint)");
-        error!("   2. All markets filtered out by category matching");
-        error!("   3. All markets closed/inactive");
-        error!("   Check the logs above for detailed conversion statistics.");
+        error!("❌ No market pairs found! Check API connection, category filters, and market availability.");
+        error!("   Review the discovery logs above for detailed information.");
         return Ok(());
     }
 

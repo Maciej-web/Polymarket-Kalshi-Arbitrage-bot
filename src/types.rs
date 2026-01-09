@@ -866,12 +866,11 @@ pub struct GammaMarket {
     pub outcome_prices: Option<String>,
     pub active: Option<bool>,
     pub closed: Option<bool>,
-    #[serde(deserialize_with = "deserialize_f64_flexible")]
+    #[serde(default, deserialize_with = "deserialize_f64_flexible")]
     pub liquidity: Option<f64>,      // Total liquidity (USD, can be string or number)
-    #[serde(deserialize_with = "deserialize_f64_flexible")]
+    #[serde(default, deserialize_with = "deserialize_f64_flexible")]
     pub volume: Option<f64>,         // Total volume (USD, can be string or number)
-    #[serde(rename = "volume24hr")]
-    #[serde(deserialize_with = "deserialize_f64_flexible")]
+    #[serde(rename = "volume24hr", default, deserialize_with = "deserialize_f64_flexible")]
     pub volume_24hr: Option<f64>,    // 24h volume (USD, can be string or number)
 }
 

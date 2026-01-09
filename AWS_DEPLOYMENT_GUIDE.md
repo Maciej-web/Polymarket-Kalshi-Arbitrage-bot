@@ -254,15 +254,180 @@ screen -ls
 
 ---
 
-## Teil 7: Bot updaten
+## Teil 7: Bot updaten & Konfiguration ändern
 
-Wenn ich neue Updates pushe:
+### 7.1 Code Updates installieren
+
+Wenn neue Updates verfügbar sind:
 
 ```bash
-# In Screen Session: Ctrl+C (Bot stoppen)
+# 1. Screen Session öffnen
+screen -r trading-bot
+
+# 2. Bot stoppen: Ctrl+C drücken
+
+# 3. Updates holen
 cd ~/Polymarket-Kalshi-Arbitrage-bot
 git pull origin claude/multi-market-trading-bot-JRod3
+
+# 4. Neu kompilieren (dauert ~1-2 Minuten)
 cargo build --release
+
+# 5. Bot neu starten
+./target/release/prediction-market-arbitrage
+
+# 6. Screen verlassen: Ctrl+A dann D
+```
+
+### 7.2 Kapital-Limits einstellen
+
+Je nachdem wieviel Kapital du einsetzen willst, musst du verschiedene Parameter anpassen.
+
+#### Für $100 Kapital (Anfänger - EMPFOHLEN)
+```bash
+# Bot stoppen (Ctrl+C)
+nano .env
+```
+
+Füge hinzu oder ändere:
+```env
+# Circuit Breaker Limits für $100 Kapital
+MAX_DAILY_LOSS_USD=25              # Max $25 Verlust pro Tag (25%)
+MAX_POSITION_SIZE_USD=10           # Max $10 pro Trade (10%)
+EXECUTION_THRESHOLD_CENTS=50       # Min 0.5% Profit (50 cents bei $100)
+```
+
+Speichern: `Ctrl+X`, `Y`, `Enter`
+
+#### Für $1,000 Kapital (Fortgeschritten)
+```bash
+nano .env
+```
+
+```env
+# Circuit Breaker Limits für $1,000 Kapital
+MAX_DAILY_LOSS_USD=100             # Max $100 Verlust pro Tag (10%)
+MAX_POSITION_SIZE_USD=50           # Max $50 pro Trade (5%)
+EXECUTION_THRESHOLD_CENTS=100      # Min 1% Profit (100 cents bei $100)
+```
+
+#### Für $10,000 Kapital (Profi)
+```bash
+nano .env
+```
+
+```env
+# Circuit Breaker Limits für $10,000 Kapital
+MAX_DAILY_LOSS_USD=500             # Max $500 Verlust pro Tag (5%)
+MAX_POSITION_SIZE_USD=200          # Max $200 pro Trade (2%)
+EXECUTION_THRESHOLD_CENTS=100      # Min 1% Profit
+```
+
+**Wichtige Erklärungen:**
+
+- **MAX_DAILY_LOSS_USD**: Bot stoppt automatisch nach diesem Verlust
+- **MAX_POSITION_SIZE_USD**: Max Betrag pro einzelnem Trade
+- **EXECUTION_THRESHOLD_CENTS**: Minimum Profit in Cents bei $100 Position
+  - 50 = 0.5% Mindestprofit
+  - 100 = 1.0% Mindestprofit
+  - 200 = 2.0% Mindestprofit
+
+**Defaults (wenn nicht gesetzt):**
+- MAX_DAILY_LOSS_USD = $500
+- MAX_POSITION_SIZE_USD = $100
+- EXECUTION_THRESHOLD_CENTS = $100 (aus ARB_THRESHOLD)
+
+### 7.3 Andere wichtige Parameter
+
+```bash
+nano .env
+```
+
+**Kategorien aktivieren/deaktivieren:**
+```env
+# Nur Crypto und Sports handeln
+ENABLED_CATEGORIES=crypto,sports
+
+# Alle Kategorien (default wenn nicht gesetzt)
+ENABLED_CATEGORIES=crypto,sports,politics,business
+```
+
+**Anzahl Markets pro Kategorie ändern:**
+
+Das geht nur im Code:
+```bash
+nano src/config.rs
+```
+
+Ändere Zeile 22:
+```rust
+pub const MARKETS_PER_CATEGORY: usize = 100;  // 100 = 400 total (4 Kategorien)
+```
+
+Mögliche Werte:
+- `50` = 200 total markets (weniger Last)
+- `100` = 400 total markets (EMPFOHLEN)
+- `150` = 600 total markets (mehr CPU needed)
+
+Nach Änderung neu kompilieren:
+```bash
+cargo build --release
+./target/release/prediction-market-arbitrage
+```
+
+### 7.4 Vollständige .env Vorlage
+
+```env
+# ============================================
+# POLYMARKET CREDENTIALS (PFLICHT)
+# ============================================
+POLY_PRIVATE_KEY=dein_private_key_hier
+POLY_FUNDER=dein_wallet_address_hier
+
+# ============================================
+# TRADING MODE (PFLICHT)
+# ============================================
+DRY_RUN=1                          # 1 = Dry Run (Test), 0 = Live Trading
+
+# ============================================
+# CIRCUIT BREAKER (Optional - hat Defaults)
+# ============================================
+MAX_DAILY_LOSS_USD=500             # Max Verlust pro Tag bevor Stop
+MAX_POSITION_SIZE_USD=100          # Max Betrag pro Trade
+
+# ============================================
+# PROFIT THRESHOLD (Optional)
+# ============================================
+EXECUTION_THRESHOLD_CENTS=100      # Min Profit in Cents bei $100 Position
+
+# ============================================
+# MARKET KATEGORIEN (Optional - default: alle)
+# ============================================
+# Nur bestimmte Kategorien handeln:
+# ENABLED_CATEGORIES=crypto,sports,politics,business
+
+# ============================================
+# DEBUGGING (Optional)
+# ============================================
+# PRICE_LOGGING=1                  # Alle Preis-Updates loggen (viel Output!)
+# TEST_ARB=1                       # Test-Arbitrage injizieren
+```
+
+### 7.5 Config-Änderungen anwenden
+
+**Nach .env Änderung:**
+```bash
+# Bot einfach neu starten
+# In Screen: Ctrl+C
+./target/release/prediction-market-arbitrage
+# Ctrl+A dann D
+```
+
+**Nach Code-Änderung (z.B. MARKETS_PER_CATEGORY):**
+```bash
+# Neu kompilieren
+cargo build --release
+# Starten
 ./target/release/prediction-market-arbitrage
 ```
 
@@ -434,33 +599,6 @@ nano .env
 
 ---
 
-## Teil 14: Performance Optimierung für 400 Markets
-
-Wenn du 400 Markets (100 pro Kategorie) willst:
-
-1. Stoppe den Bot
-2. Edit Config:
-```bash
-nano src/config.rs
-```
-3. Ändere Zeile 22:
-```rust
-pub const MARKETS_PER_CATEGORY: usize = 100;
-```
-4. Speichere: `Ctrl+X`, `Y`, `Enter`
-5. Neu kompilieren:
-```bash
-cargo build --release
-```
-6. Starten:
-```bash
-./target/release/prediction-market-arbitrage
-```
-
-**Bot überwacht jetzt 400 Markets!**
-
----
-
 ## Schnell-Referenz
 
 ### SSH Verbinden
@@ -483,9 +621,29 @@ screen -r trading-bot
 
 ### Bot updaten
 ```bash
+# Screen öffnen
+screen -r trading-bot
+# Bot stoppen: Ctrl+C
 cd ~/Polymarket-Kalshi-Arbitrage-bot
-git pull
+git pull origin claude/multi-market-trading-bot-JRod3
 cargo build --release
+./target/release/prediction-market-arbitrage
+# Verlassen: Ctrl+A dann D
+```
+
+### Kapital-Limits Übersicht
+
+| Kapital | MAX_DAILY_LOSS_USD | MAX_POSITION_SIZE_USD | EXECUTION_THRESHOLD_CENTS |
+|---------|--------------------|-----------------------|---------------------------|
+| $100    | $25 (25%)          | $10 (10%)             | 50 (0.5% profit)          |
+| $1,000  | $100 (10%)         | $50 (5%)              | 100 (1.0% profit)         |
+| $10,000 | $500 (5%)          | $200 (2%)             | 100 (1.0% profit)         |
+
+In `.env` einstellen:
+```bash
+nano .env
+# Parameter hinzufügen, speichern mit Ctrl+X, Y, Enter
+# Bot neu starten
 ```
 
 ---
