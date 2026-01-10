@@ -1,7 +1,7 @@
 //! System configuration and market category definitions.
 //!
 //! This module contains all configuration constants and category mappings
-//! for the Polymarket-only trading system.
+//! for the Polymarket sports arbitrage trading system.
 
 /// Polymarket WebSocket URL
 pub const POLYMARKET_WS_URL: &str = "wss://ws-subscriptions-clob.polymarket.com/ws/market";
@@ -68,12 +68,12 @@ impl std::fmt::Display for MarketCategory {
 
 /// Get enabled market categories from environment variable
 /// Format: ENABLED_CATEGORIES="crypto,sports,politics"
-/// If not set, defaults to sports + politics only
+/// If not set, defaults to sports only
 pub fn get_enabled_categories() -> Vec<MarketCategory> {
     if let Ok(categories_str) = std::env::var("ENABLED_CATEGORIES") {
         if categories_str.is_empty() {
-            // Default to sports + politics
-            return vec![MarketCategory::Sports, MarketCategory::Politics];
+            // Default to sports only
+            return vec![MarketCategory::Sports];
         }
 
         categories_str
@@ -81,8 +81,8 @@ pub fn get_enabled_categories() -> Vec<MarketCategory> {
             .filter_map(|s| MarketCategory::from_str(s.trim()))
             .collect()
     } else {
-        // Default: sports + politics only
-        vec![MarketCategory::Sports, MarketCategory::Politics]
+        // Default: sports only
+        vec![MarketCategory::Sports]
     }
 }
 
