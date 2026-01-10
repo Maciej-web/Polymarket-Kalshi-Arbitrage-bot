@@ -131,7 +131,7 @@ impl DiscoveryClient {
         let mut offset = 0;
 
         loop {
-            let url = format!("{}/markets?limit={}&offset={}&closed=false&active=true",
+            let url = format!("{}/markets?limit={}&offset={}&closed=false",
                             GAMMA_API_BASE, CHUNK_SIZE, offset);
 
             info!("   Fetching chunk: offset={}, limit={}", offset, CHUNK_SIZE);
@@ -227,14 +227,9 @@ impl DiscoveryClient {
 
     /// Convert GammaMarket to MarketPair
     fn convert_gamma_market(&self, market: GammaMarket, categories: &[MarketCategory]) -> Option<MarketPair> {
-        // Filter out closed markets (includes resolved markets)
+        // Filter out explicitly closed markets (includes resolved markets)
+        // Markets with closed=None or closed=false are considered open
         if market.closed == Some(true) {
-            return None;
-        }
-
-        // Filter out inactive markets (must be explicitly active)
-        // Inactive markets cannot be traded even if not yet resolved
-        if market.active != Some(true) {
             return None;
         }
 
