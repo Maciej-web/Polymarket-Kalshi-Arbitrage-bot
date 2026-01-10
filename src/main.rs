@@ -94,10 +94,10 @@ async fn main() -> Result<()> {
     let prepared_creds = PreparedCreds::from_api_creds(&api_creds)?;
     let poly_async = Arc::new(SharedAsyncClient::new(poly_async_client, prepared_creds, POLYGON_CHAIN_ID));
 
-    // Load neg_risk cache from Python script output
+    // Load neg_risk cache from Python script output (optional)
     match poly_async.load_cache(".clob_market_cache.json") {
         Ok(count) => info!("[POLYMARKET] Loaded {} neg_risk entries from cache", count),
-        Err(e) => warn!("[POLYMARKET] Could not load neg_risk cache: {}", e),
+        Err(_) => {} // Ignore missing cache - will be created on first order
     }
 
     info!("[POLYMARKET] Client ready for {}", &poly_funder[..10]);

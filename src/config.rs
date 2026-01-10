@@ -19,11 +19,12 @@ pub const POLY_PING_INTERVAL_SECS: u64 = 30;
 pub const WS_RECONNECT_DELAY_SECS: u64 = 5;
 
 /// Minimum liquidity to consider a market (USD)
-pub const MIN_LIQUIDITY_USD: f64 = 500.0;
+/// Lowered to $100 for small budgets - more opportunities
+pub const MIN_LIQUIDITY_USD: f64 = 100.0;
 
 /// Minimum 24h volume to consider a market active (USD)
-/// Set to $1000 - bot will rank by volume and take top 500 for WebSocket
-pub const MIN_VOLUME_24H_USD: f64 = 1000.0;
+/// Lowered to $200 for small budgets - catches upcoming events
+pub const MIN_VOLUME_24H_USD: f64 = 200.0;
 
 /// Market refresh interval in seconds (2 hours = 7200s)
 /// Bot will re-discover markets every 2 hours to find new opportunities
