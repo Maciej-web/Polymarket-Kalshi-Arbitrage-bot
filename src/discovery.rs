@@ -125,8 +125,11 @@ impl DiscoveryClient {
     async fn discover_full(&self, categories: &[MarketCategory]) -> DiscoveryResult {
         info!("🔍 Fetching Polymarket markets from {}/markets", GAMMA_API_BASE);
 
-        // Fetch all markets from Gamma API with high limit
-        let url = format!("{}/markets?limit=10000&closed=false", GAMMA_API_BASE);
+        // Fetch sports markets from Gamma API with filters:
+        // - tag_id=100639: Sports/Games category
+        // - closed=false: Exclude resolved markets
+        // - active=true: Only active markets with recent activity
+        let url = format!("{}/markets?tag_id=100639&closed=false&active=true&limit=10000", GAMMA_API_BASE);
 
         let resp = match self.http.get(&url).send().await {
             Ok(r) => r,
@@ -152,9 +155,8 @@ impl DiscoveryClient {
             }
         };
 
-        info!("📊 Fetched {} markets, filtering by categories: {:?}",
-            all_markets.len(),
-            categories.iter().map(|c| c.as_str()).collect::<Vec<_>>());
+        info!("📊 Fetched {} sports markets from API, applying local filters (liquidity, volume)",
+            all_markets.len());
 
         // Convert to MarketPair and filter - KEEP ALL matching markets (no top-N limit!)
         let markets: Vec<MarketPair> = all_markets
