@@ -236,7 +236,9 @@ pub async fn run_ws(
         sub_type: "market",
     };
 
-    write.send(Message::Text(serde_json::to_string(&subscribe_msg)?)).await?;
+    let sub_json = serde_json::to_string(&subscribe_msg)?;
+    info!("[POLY] 📤 Sending subscription: {}", &sub_json[..sub_json.len().min(200)]);
+    write.send(Message::Text(sub_json)).await?;
     info!("[POLY] Subscribed to {} tokens ({} markets)", tokens_to_sub.len(), tokens_to_sub.len() / 2);
 
     let clock = NanoClock::new();
@@ -273,9 +275,9 @@ pub async fn run_ws(
                                 }
                             }
                         }
-                        // Log unknown message types at trace level for debugging
+                        // Log unknown message types for debugging
                         else {
-                            tracing::trace!("[POLY] Unknown WS message: {}...", &text[..text.len().min(100)]);
+                            warn!("[POLY] ⚠️  Unknown WS message format: {}", &text[..text.len().min(500)]);
                         }
                     }
                     Some(Ok(Message::Ping(data))) => {
