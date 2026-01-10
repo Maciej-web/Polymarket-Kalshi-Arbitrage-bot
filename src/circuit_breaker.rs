@@ -36,17 +36,17 @@ impl CircuitBreakerConfig {
             max_position_per_market: std::env::var("CB_MAX_POSITION_PER_MARKET")
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(50000),
-            
+                .unwrap_or(10),
+
             max_total_position: std::env::var("CB_MAX_TOTAL_POSITION")
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(100000),
-            
+                .unwrap_or(50),
+
             max_daily_loss: std::env::var("CB_MAX_DAILY_LOSS")
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(500.0),
+                .unwrap_or(10.0),
             
             max_consecutive_errors: std::env::var("CB_MAX_CONSECUTIVE_ERRORS")
                 .ok()

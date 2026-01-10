@@ -63,31 +63,46 @@ cargo build --release
 
 ### 2. Set Up Credentials
 
-Create a `.env` file:
+Copy the example configuration and edit it:
 
 ```bash
-# === KALSHI CREDENTIALS ===
-KALSHI_API_KEY_ID=your_kalshi_api_key_id
-KALSHI_PRIVATE_KEY_PATH=/path/to/kalshi_private_key.pem
+# Copy template
+cp .env.example .env
 
-# === POLYMARKET CREDENTIALS ===
-POLY_PRIVATE_KEY=0xYOUR_WALLET_PRIVATE_KEY
-POLY_FUNDER=0xYOUR_WALLET_ADDRESS
-
-# === SYSTEM CONFIGURATION ===
-DRY_RUN=1
-RUST_LOG=info
+# Edit with your credentials
+nano .env  # or vim, code, etc.
 ```
 
-### 3. Run
+**Required: Fill in your Polymarket wallet details:**
+- `POLY_PRIVATE_KEY`: Your wallet private key (export from MetaMask)
+- `POLY_FUNDER`: Your wallet address
+
+**For $50 test budget, recommended settings are already configured:**
+- `CB_MAX_POSITION_PER_MARKET=10` (max 10 contracts per market)
+- `CB_MAX_TOTAL_POSITION=50` (max 50 contracts total)
+- `CB_MAX_DAILY_LOSS=10.0` (halt after $10 loss)
+
+### 3. Test First (Recommended!)
 
 ```bash
-# Dry run (paper trading)
-dotenvx run -- cargo run --release
+# Step 1: Dry run to verify setup
+DRY_RUN=1 cargo run --release
 
-# Live execution
-DRY_RUN=0 dotenvx run -- cargo run --release
+# Step 2: Test execution logic with simulated arbitrage
+TEST_ARB=1 DRY_RUN=1 cargo run --release
+
+# Step 3: Go live with small budget
+DRY_RUN=0 cargo run --release
 ```
+
+### 4. Monitor Output
+
+The bot will:
+- ✅ Discover sports markets from Polymarket
+- ✅ Monitor prices in real-time via WebSocket
+- ✅ Alert on arbitrage opportunities (YES + NO < $1.00)
+- ✅ Execute trades automatically (if DRY_RUN=0)
+- ✅ Auto-halt if circuit breaker limits are hit
 
 ---
 
