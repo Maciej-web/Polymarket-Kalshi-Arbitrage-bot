@@ -121,69 +121,38 @@ impl DiscoveryClient {
         result
     }
 
-    /// Full discovery - fetch ALL markets with pagination
+    /// Full discovery - fetch all markets
     async fn discover_full(&self, categories: &[MarketCategory]) -> DiscoveryResult {
-        info!("🔍 Fetching ALL Polymarket markets with pagination from {}/markets", GAMMA_API_BASE);
+        info!("🔍 Fetching Polymarket markets from {}/markets", GAMMA_API_BASE);
 
-        // Fetch markets in chunks of 500 until we get less than 500 (meaning we're done)
-        const CHUNK_SIZE: usize = 500;
-        let mut all_markets: Vec<GammaMarket> = Vec::new();
-        let mut offset = 0;
+        // Fetch all markets from Gamma API with high limit
+        let url = format!("{}/markets?limit=10000&closed=false", GAMMA_API_BASE);
 
-        loop {
-            let url = format!("{}/markets?limit={}&offset={}&closed=false",
-                            GAMMA_API_BASE, CHUNK_SIZE, offset);
-
-            info!("   Fetching chunk: offset={}, limit={}", offset, CHUNK_SIZE);
-
-            let resp = match self.http.get(&url).send().await {
-                Ok(r) => r,
-                Err(e) => {
-                    warn!("❌ API request failed at offset {}: {}", offset, e);
-                    if all_markets.is_empty() {
-                        return DiscoveryResult {
-                            pairs: vec![],
-                            total_found: 0,
-                            errors: vec![format!("Failed to fetch markets: {}", e)],
-                        };
-                    }
-                    // If we already have some markets, continue with what we have
-                    warn!("⚠️  Continuing with {} markets fetched so far", all_markets.len());
-                    break;
-                }
-            };
-
-            let chunk: Vec<GammaMarket> = match resp.json().await {
-                Ok(m) => m,
-                Err(e) => {
-                    warn!("❌ Failed to parse JSON at offset {}: {}", offset, e);
-                    if all_markets.is_empty() {
-                        return DiscoveryResult {
-                            pairs: vec![],
-                            total_found: 0,
-                            errors: vec![format!("Failed to parse markets: {}", e)],
-                        };
-                    }
-                    warn!("⚠️  Continuing with {} markets fetched so far", all_markets.len());
-                    break;
-                }
-            };
-
-            let chunk_len = chunk.len();
-            all_markets.extend(chunk);
-
-            info!("   ✓ Fetched {} markets (total so far: {})", chunk_len, all_markets.len());
-
-            // If we got less than CHUNK_SIZE, we've reached the end
-            if chunk_len < CHUNK_SIZE {
-                info!("   📊 Reached end of markets (chunk size {} < {})", chunk_len, CHUNK_SIZE);
-                break;
+        let resp = match self.http.get(&url).send().await {
+            Ok(r) => r,
+            Err(e) => {
+                warn!("❌ API request failed: {}", e);
+                return DiscoveryResult {
+                    pairs: vec![],
+                    total_found: 0,
+                    errors: vec![format!("Failed to fetch markets: {}", e)],
+                };
             }
+        };
 
-            offset += CHUNK_SIZE;
-        }
+        let all_markets: Vec<GammaMarket> = match resp.json().await {
+            Ok(m) => m,
+            Err(e) => {
+                warn!("❌ Failed to parse JSON response: {}", e);
+                return DiscoveryResult {
+                    pairs: vec![],
+                    total_found: 0,
+                    errors: vec![format!("Failed to parse markets: {}", e)],
+                };
+            }
+        };
 
-        info!("📊 Total fetched: {} markets, filtering by categories: {:?}",
+        info!("📊 Fetched {} markets, filtering by categories: {:?}",
             all_markets.len(),
             categories.iter().map(|c| c.as_str()).collect::<Vec<_>>());
 
