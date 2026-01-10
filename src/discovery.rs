@@ -126,10 +126,10 @@ impl DiscoveryClient {
         info!("🔍 Fetching Polymarket markets from {}/markets", GAMMA_API_BASE);
 
         // Fetch sports markets from Gamma API with filters:
-        // - tag_id=100639: Sports/Games category
+        // - tag_id=100639: Sports/Games category (API-side filtering)
         // - closed=false: Exclude resolved markets
-        // - active=true: Only active markets with recent activity
-        let url = format!("{}/markets?tag_id=100639&closed=false&active=true&limit=10000", GAMMA_API_BASE);
+        // Local filters (liquidity, volume) applied after to catch upcoming events
+        let url = format!("{}/markets?tag_id=100639&closed=false&limit=10000", GAMMA_API_BASE);
 
         let resp = match self.http.get(&url).send().await {
             Ok(r) => r,
